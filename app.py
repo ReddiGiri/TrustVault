@@ -190,6 +190,7 @@ def home():
 # REGISTRATION ROUTE
 # --------------------------------------------------
 
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
 
@@ -198,13 +199,24 @@ def register():
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        role = request.form.get("role", "").upper()
 
-        if not name or not email or not password:
+        if not name or not email or not password or not role:
             flash("Please fill all required fields.")
             return redirect(url_for("register"))
 
         if len(password) < 8:
             flash("Password must contain at least 8 characters.")
+            return redirect(url_for("register"))
+
+        if password != confirm_password:
+            flash("Passwords do not match.")
+            return redirect(url_for("register"))
+
+        # Only OWNER and VIEWER registration allowed
+        if role not in ("OWNER", "VIEWER"):
+            flash("Invalid role selected.")
             return redirect(url_for("register"))
 
         existing_user = User.query.filter_by(
@@ -219,7 +231,7 @@ def register():
             name=name,
             email=email,
             password_hash=generate_password_hash(password),
-            role="VIEWER"
+            role=role
         )
 
         try:
@@ -236,7 +248,6 @@ def register():
             return redirect(url_for("register"))
 
     return render_template("register.html")
-
 
 # --------------------------------------------------
 # LOGIN ROUTE
