@@ -1,0 +1,273 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustVault - Admin Activity</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 25px;
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        header {
+            background: #172554;
+            color: white;
+            padding: 22px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+
+        header h1 {
+            margin: 0 0 8px;
+        }
+
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        select, button {
+            padding: 11px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+
+        .table-container {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 750px;
+        }
+
+        th, td {
+            padding: 14px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f8fafc;
+        }
+
+        .success {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .denied {
+            color: #dc2626;
+            font-weight: bold;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px;
+            align-items: center;
+        }
+
+        .pagination a {
+            text-decoration: none;
+            background: #2563eb;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+
+        .back {
+            display: inline-block;
+            margin-bottom: 15px;
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 30px;
+            color: #64748b;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <a class="back" href="{{ url_for('dashboard') }}">
+        ← Back to Dashboard
+    </a>
+
+    <header>
+        <h1>TrustVault Admin Activity</h1>
+        <p>Monitor document access and security events.</p>
+    </header>
+
+    <form method="GET" class="filters">
+
+        <label for="action">Action:</label>
+
+        <select name="action" id="action">
+            <option value="">All Actions</option>
+            {% for item in logs %}
+                <option value="{{ item.action }}"
+                    {% if selected_action == item.action %}selected{% endif %}>
+                    {{ item.action }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <label for="outcome">Outcome:</label>
+
+        <select name="outcome" id="outcome">
+            <option value="">All Outcomes</option>
+            <option value="SUCCESS"
+                {% if selected_outcome == "SUCCESS" %}selected{% endif %}>
+                SUCCESS
+            </option>
+            <option value="DENIED"
+                {% if selected_outcome == "DENIED" %}selected{% endif %}>
+                DENIED
+            </option>
+        </select>
+
+        <button type="submit">Apply Filters</button>
+
+        <a href="{{ url_for('admin.activity') }}">Clear</a>
+
+    </form>
+
+    <div class="table-container">
+
+        <h2>Activity Records</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Document</th>
+                    <th>Action</th>
+                    <th>Outcome</th>
+                    <th>Details</th>
+                    <th>Date & Time</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for log in logs %}
+
+                <tr>
+                    <td>{{ log.id }}</td>
+
+                    <td>
+                        {% if log.actor_id and users.get(log.actor_id) %}
+                            {{ users[log.actor_id].name }}
+                        {% else %}
+                            Unknown / Deleted User
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if log.document_id and documents.get(log.document_id) %}
+                            {{ documents[log.document_id].title }}
+                        {% else %}
+                            Deleted / Unavailable
+                        {% endif %}
+                    </td>
+
+                    <td>{{ log.action }}</td>
+
+                    <td>
+                        {% if log.outcome == "SUCCESS" %}
+                            <span class="success">SUCCESS</span>
+                        {% else %}
+                            <span class="denied">DENIED</span>
+                        {% endif %}
+                    </td>
+
+                    <td>{{ log.details or "—" }}</td>
+
+                    <td>{{ log.created_at }}</td>
+                </tr>
+
+                {% else %}
+
+                <tr>
+                    <td colspan="7" class="empty">
+                        No activity records found.
+                    </td>
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+        </table>
+
+    </div>
+
+    <div class="pagination">
+
+        {% if pagination.has_prev %}
+            <a href="{{ url_for(
+                'admin.activity',
+                page=pagination.prev_num,
+                action=selected_action,
+                outcome=selected_outcome
+            ) }}">Previous</a>
+        {% endif %}
+
+        <span>
+            Page {{ pagination.page }} of {{ pagination.pages or 1 }}
+        </span>
+
+        {% if pagination.has_next %}
+            <a href="{{ url_for(
+                'admin.activity',
+                page=pagination.next_num,
+                action=selected_action,
+                outcome=selected_outcome
+            ) }}">Next</a>
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+</html>

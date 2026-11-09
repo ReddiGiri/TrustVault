@@ -1,0 +1,513 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustVault PDF Editor</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+
+        header {
+            background: #172554;
+            color: white;
+            padding: 18px 25px;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 15px;
+            background: white;
+            box-shadow: 0 2px 8px #0001;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: 0;
+            border-radius: 6px;
+            background: #e2e8f0;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button.active, button:hover {
+            background: #2563eb;
+            color: white;
+        }
+
+        #saveBtn {
+            background: #15803d;
+            color: white;
+        }
+
+        main {
+            padding: 25px;
+            text-align: center;
+        }
+
+        #pageContainer {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            background: white;
+            box-shadow: 0 3px 15px #0002;
+        }
+
+        #pdfCanvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .status {
+            margin: 15px;
+            font-weight: bold;
+        }
+
+        .navigation {
+            margin: 15px;
+        }
+
+        input {
+            padding: 9px;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+        }
+
+        @media(max-width:600px) {
+            main { padding: 10px; }
+            .toolbar { justify-content: center; }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h2>TrustVault PDF Editor</h2>
+    <p>Editing: {{ document.title }}</p>
+</header>
+
+<div class="toolbar">
+    <button id="textTool">Add Text</button>
+    <button id="highlightTool">Highlight</button>
+    <button id="drawTool">Draw</button>
+    <button id="signatureTool">Signature</button>
+    <button id="undoBtn">Undo</button>
+    <button id="saveBtn">Save PDF</button>
+    <a href="{{ url_for('documents.my_documents') }}">
+        <button type="button">Back</button>
+    </a>
+</div>
+
+<main>
+    <div class="navigation">
+        <button id="prevPage">Previous</button>
+        <span id="pageInfo">Page 1</span>
+        <button id="nextPage">Next</button>
+    </div>
+
+    <div id="pageContainer">
+        <canvas id="pdfCanvas"></canvas>
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <p class="status" id="status">Loading PDF...</p>
+</main>
+
+<script>
+    const pdfUrl = {{ pdf_url | tojson }};
+    const documentId = {{ document.id | tojson }};
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    const pdfCanvas = document.getElementById("pdfCanvas");
+    const overlay = document.getElementById("overlay");
+    const ctx = overlay.getContext("2d");
+    const pdfCtx = pdfCanvas.getContext("2d");
+
+    let pdfDoc;
+    let currentPage = 1;
+    let totalPages = 0;
+    let currentTool = "";
+    let drawing = false;
+    let startPoint = null;
+
+    // Annotations are stored separately for each PDF page.
+    const annotations = {};
+
+    function getAnnotations() {
+        if (!annotations[currentPage]) {
+            annotations[currentPage] = [];
+        }
+        return annotations[currentPage];
+    }
+
+    function setStatus(message) {
+        document.getElementById("status").textContent = message;
+    }
+
+    async function loadPDF() {
+        try {
+            const loadingTask = pdfjsLib.getDocument(pdfUrl);
+            pdfDoc = await loadingTask.promise;
+            totalPages = pdfDoc.numPages;
+            await renderPage(currentPage);
+            setStatus("PDF loaded successfully.");
+        } catch (error) {
+            console.error(error);
+            setStatus("Unable to load PDF. Check your access and PDF file.");
+        }
+    }
+
+    async function renderPage(pageNumber) {
+        const page = await pdfDoc.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 1.4 });
+
+        pdfCanvas.width = viewport.width;
+        pdfCanvas.height = viewport.height;
+
+        overlay.width = viewport.width;
+        overlay.height = viewport.height;
+
+        await page.render({
+            canvasContext: pdfCtx,
+            viewport: viewport
+        }).promise;
+
+        redrawAnnotations();
+
+        document.getElementById("pageInfo").textContent =
+            `Page ${currentPage} of ${totalPages}`;
+    }
+
+    function redrawAnnotations() {
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        getAnnotations().forEach(item => {
+            if (item.type === "text" || item.type === "signature") {
+                ctx.fillStyle = item.color;
+                ctx.font = item.font;
+                ctx.fillText(item.text, item.x, item.y);
+            }
+
+            if (item.type === "highlight") {
+                ctx.fillStyle = "rgba(255, 220, 0, 0.35)";
+                ctx.fillRect(
+                    item.x, item.y,
+                    item.width, item.height
+                );
+            }
+
+            if (item.type === "draw") {
+                ctx.strokeStyle = item.color;
+                ctx.lineWidth = item.lineWidth;
+                ctx.lineCap = "round";
+
+                ctx.beginPath();
+
+                item.points.forEach((point, index) => {
+                    if (index === 0) {
+                        ctx.moveTo(point.x, point.y);
+                    } else {
+                        ctx.lineTo(point.x, point.y);
+                    }
+                });
+
+                ctx.stroke();
+            }
+        });
+    }
+
+    function selectTool(tool) {
+        currentTool = tool;
+
+        document.querySelectorAll(".toolbar button")
+            .forEach(button => button.classList.remove("active"));
+
+        const button = document.getElementById(tool + "Tool");
+        if (button) button.classList.add("active");
+
+        setStatus("Selected tool: " + tool);
+    }
+
+    document.getElementById("textTool").onclick =
+        () => selectTool("text");
+
+    document.getElementById("highlightTool").onclick =
+        () => selectTool("highlight");
+
+    document.getElementById("drawTool").onclick =
+        () => selectTool("draw");
+
+    document.getElementById("signatureTool").onclick =
+        () => selectTool("signature");
+
+    function getPosition(event) {
+        const rect = overlay.getBoundingClientRect();
+
+        return {
+            x: (event.clientX - rect.left) *
+                (overlay.width / rect.width),
+            y: (event.clientY - rect.top) *
+                (overlay.height / rect.height)
+        };
+    }
+
+    overlay.addEventListener("pointerdown", event => {
+        if (!currentTool) {
+            setStatus("Select an editing tool first.");
+            return;
+        }
+
+        const point = getPosition(event);
+
+        if (currentTool === "text" ||
+            currentTool === "signature") {
+
+            const text = prompt(
+                currentTool === "signature"
+                    ? "Enter signature text:"
+                    : "Enter text:"
+            );
+
+            if (!text) return;
+
+            getAnnotations().push({
+                type: currentTool,
+                text: text,
+                x: point.x,
+                y: point.y,
+                color: "#111827",
+                font: currentTool === "signature"
+                    ? "italic 24px cursive"
+                    : "20px Arial"
+            });
+
+            redrawAnnotations();
+            return;
+        }
+
+        drawing = true;
+        startPoint = point;
+
+        if (currentTool === "draw") {
+            getAnnotations().push({
+                type: "draw",
+                points: [point],
+                color: "#dc2626",
+                lineWidth: 3
+            });
+        }
+
+        overlay.setPointerCapture(event.pointerId);
+    });
+
+    overlay.addEventListener("pointermove", event => {
+        if (!drawing) return;
+
+        const point = getPosition(event);
+
+        if (currentTool === "draw") {
+            const items = getAnnotations();
+            items[items.length - 1].points.push(point);
+            redrawAnnotations();
+        }
+    });
+
+    function stopDrawing(event) {
+        if (!drawing) return;
+
+        if (currentTool === "highlight") {
+            const point = getPosition(event);
+
+            getAnnotations().push({
+                type: "highlight",
+                x: Math.min(startPoint.x, point.x),
+                y: Math.min(startPoint.y, point.y),
+                width: Math.abs(point.x - startPoint.x),
+                height: Math.abs(point.y - startPoint.y)
+            });
+
+            redrawAnnotations();
+        }
+
+        drawing = false;
+        startPoint = null;
+    }
+
+    overlay.addEventListener("pointerup", stopDrawing);
+    overlay.addEventListener("pointercancel", stopDrawing);
+
+    document.getElementById("undoBtn").onclick = () => {
+        const items = getAnnotations();
+
+        if (items.length > 0) {
+            items.pop();
+            redrawAnnotations();
+            setStatus("Last annotation removed.");
+        }
+    };
+
+    document.getElementById("prevPage").onclick = async () => {
+        if (currentPage > 1) {
+            currentPage--;
+            await renderPage(currentPage);
+        }
+    };
+
+    document.getElementById("nextPage").onclick = async () => {
+        if (currentPage < totalPages) {
+            currentPage++;
+            await renderPage(currentPage);
+        }
+    };
+
+    // Save annotations into a new PDF using pdf-lib.
+    document.getElementById("saveBtn").onclick = async () => {
+        const saveButton = document.getElementById("saveBtn");
+
+        try {
+            saveButton.disabled = true;
+            setStatus("Preparing edited PDF...");
+
+            const response = await fetch(pdfUrl, {
+                credentials: "same-origin"
+            });
+
+            if (!response.ok) {
+                throw new Error("Unable to retrieve original PDF.");
+            }
+
+            const originalBytes = await response.arrayBuffer();
+
+            const pdfDocToSave = await PDFLib.PDFDocument.load(
+                originalBytes
+            );
+
+            const pages = pdfDocToSave.getPages();
+
+            for (const [pageKey, items] of Object.entries(annotations)) {
+                const pageIndex = Number(pageKey) - 1;
+                const pdfPage = pages[pageIndex];
+
+                if (!pdfPage) continue;
+
+                const { width, height } = pdfPage.getSize();
+
+                // Canvas coordinates are scaled by 1.4.
+                const scaleX = width / overlay.width;
+                const scaleY = height / overlay.height;
+
+                for (const item of items) {
+                    if (item.type === "text" ||
+                        item.type === "signature") {
+
+                        const fontSize = item.type === "signature" ? 18 : 14;
+
+                        pdfPage.drawText(item.text, {
+                            x: item.x * scaleX,
+                            y: height - item.y * scaleY - fontSize,
+                            size: fontSize,
+                            color: PDFLib.rgb(0.07, 0.09, 0.15)
+                        });
+                    }
+
+                    if (item.type === "highlight") {
+                        pdfPage.drawRectangle({
+                            x: item.x * scaleX,
+                            y: height - (item.y + item.height) * scaleY,
+                            width: item.width * scaleX,
+                            height: item.height * scaleY,
+                            color: PDFLib.rgb(1, 0.85, 0),
+                            opacity: 0.3
+                        });
+                    }
+
+                    if (item.type === "draw" &&
+                        item.points.length > 1) {
+
+                        for (let i = 1; i < item.points.length; i++) {
+                            const a = item.points[i - 1];
+                            const b = item.points[i];
+
+                            pdfPage.drawLine({
+                                start: {
+                                    x: a.x * scaleX,
+                                    y: height - a.y * scaleY
+                                },
+                                end: {
+                                    x: b.x * scaleX,
+                                    y: height - b.y * scaleY
+                                },
+                                thickness: 2,
+                                color: PDFLib.rgb(0.85, 0.1, 0.1)
+                            });
+                        }
+                    }
+                }
+            }
+
+            const editedBytes = await pdfDocToSave.save();
+
+            const formData = new FormData();
+            formData.append(
+                "edited_pdf",
+                new Blob([editedBytes], { type: "application/pdf" }),
+                "edited_document.pdf"
+            );
+
+            const saveResponse = await fetch(
+                `/editor/${documentId}/save`,
+                {
+                    method: "POST",
+                    credentials: "same-origin",
+                    body: formData
+                }
+            );
+
+            if (!saveResponse.ok) {
+                throw new Error(
+                    saveResponse.status === 403
+                        ? "EDIT permission denied."
+                        : "Server could not save the edited PDF."
+                );
+            }
+
+            setStatus("PDF saved successfully!");
+        } catch (error) {
+            console.error(error);
+            setStatus("Save failed: " + error.message);
+        } finally {
+            saveButton.disabled = false;
+        }
+    };
+
+    loadPDF();
+</script>
+
+</body>
+</html>

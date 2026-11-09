@@ -1,0 +1,54 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TrustVault Registration</title>
+</head>
+<body>
+
+    <h2>TrustVault Registration</h2>
+
+    {% with messages = get_flashed_messages() %}
+        {% for message in messages %}
+            <p>{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST" autocomplete="off">
+
+        <input
+            type="text"
+            name="name"
+            placeholder="Full Name"
+            autocomplete="off"
+            required
+        >
+
+        <input
+            type="email"
+            name="email"
+            placeholder="Email"
+            autocomplete="off"
+            required
+        >
+
+        <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+        >
+
+        <button type="submit">Register</button>
+
+    </form>
+
+    <p>
+        Already have an account?
+        <a href="/login">Login</a>
+    </p>
+
+</body>
+</html>

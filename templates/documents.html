@@ -1,0 +1,848 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustVault - Document Management</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 25px;
+            font-family: Arial, sans-serif;
+            background: #f4f6fb;
+            color: #1e293b;
+        }
+
+        .container {
+            max-width: 1250px;
+            margin: auto;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        h1, h2, h3 {
+            color: #172554;
+        }
+
+        .card {
+            background: white;
+            padding: 22px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+        }
+
+        input, select {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            margin: 5px;
+            max-width: 100%;
+        }
+
+        button, .btn {
+            display: inline-block;
+            padding: 10px 14px;
+            border: none;
+            border-radius: 6px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            cursor: pointer;
+            margin: 4px;
+            font-size: 13px;
+        }
+
+        button:hover, .btn:hover {
+            opacity: 0.85;
+        }
+
+        .green {
+            background: #15803d;
+        }
+
+        .red {
+            background: #dc2626;
+        }
+
+        .orange {
+            background: #ea580c;
+        }
+
+        .gray {
+            background: #475569;
+        }
+
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 850px;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 13px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        th {
+            background: #eff6ff;
+            color: #1e3a8a;
+        }
+
+        .permission-section {
+            background: white;
+            padding: 22px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+        }
+
+        .document-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 9px;
+            padding: 17px;
+            margin-top: 15px;
+            background: #fafcff;
+        }
+
+        .permission-badge {
+            display: inline-block;
+            padding: 6px 11px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .edit-badge {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .flash {
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #dbeafe;
+            color: #1e40af;
+            border-radius: 7px;
+        }
+
+        .empty {
+            color: #64748b;
+            padding: 12px 0;
+        }
+
+        .inline-form {
+            display: inline-block;
+            margin: 4px;
+        }
+
+        .shared-user {
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 7px;
+            margin-top: 10px;
+            background: white;
+        }
+
+        .section-description {
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        @media(max-width: 700px) {
+            body {
+                padding: 12px;
+            }
+
+            .card, .permission-section {
+                padding: 14px;
+            }
+
+            .topbar {
+                align-items: flex-start;
+            }
+
+            input, select {
+                width: 100%;
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- HEADER -->
+
+    <div class="topbar">
+
+        <div>
+            <h1>🔐 TrustVault</h1>
+            <p>Secure Document Management System</p>
+            <p>
+                Logged in as:
+                <strong>{{ current_user.name }}</strong>
+                ({{ current_user.role }})
+            </p>
+        </div>
+
+        <div>
+
+            <a class="btn gray" href="{{ url_for('dashboard') }}">
+                Dashboard
+            </a>
+
+            {% if current_user.role == "ADMIN" %}
+                <a class="btn orange"
+                   href="{{ url_for('admin.admin_activity') }}">
+                    Admin Activity
+                </a>
+            {% endif %}
+
+        </div>
+
+    </div>
+
+
+    <!-- FLASH MESSAGES -->
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="flash">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+
+    <!-- OWNER UPLOAD SECTION -->
+
+    {% if current_user.role == "OWNER" %}
+
+    <div class="card">
+
+        <h2>📤 Upload Document</h2>
+
+        <form
+            action="{{ url_for('documents.upload_document') }}"
+            method="POST"
+            enctype="multipart/form-data"
+        >
+
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            >
+
+            <input
+                type="text"
+                name="title"
+                placeholder="Enter document title"
+                required
+            >
+
+            <input
+                type="text"
+                name="category"
+                placeholder="Enter category"
+            >
+
+            <input
+                type="file"
+                name="document"
+                accept=".pdf,.docx,.png,.jpg,.jpeg"
+                required
+            >
+
+            <button type="submit">
+                Upload Document
+            </button>
+
+        </form>
+
+        <small>
+            Allowed: PDF, DOCX, PNG, JPG, JPEG.
+            Maximum file size: 10 MB.
+        </small>
+
+    </div>
+
+    {% endif %}
+
+
+    <!-- SEARCH AND FILTERS -->
+
+    <div class="card">
+
+        <h2>🔎 Search Documents</h2>
+
+        <form
+            method="GET"
+            action="{{ url_for('documents.my_documents') }}"
+        >
+
+            <input
+                type="text"
+                name="search"
+                placeholder="Search document name"
+                value="{{ search }}"
+            >
+
+            <input
+                type="text"
+                name="owner"
+                placeholder="Search owner"
+                value="{{ owner_filter }}"
+            >
+
+            <input
+                type="text"
+                name="category"
+                placeholder="Search category"
+                value="{{ category_filter }}"
+            >
+
+            <label>From:</label>
+
+            <input
+                type="date"
+                name="from_date"
+                value="{{ from_date }}"
+            >
+
+            <label>To:</label>
+
+            <input
+                type="date"
+                name="to_date"
+                value="{{ to_date }}"
+            >
+
+            <button type="submit">
+                Search
+            </button>
+
+            <a
+                class="btn gray"
+                href="{{ url_for('documents.my_documents') }}"
+            >
+                Clear Filters
+            </a>
+
+        </form>
+
+    </div>
+
+
+    <!-- AVAILABLE DOCUMENTS -->
+
+    <div class="card">
+
+        <h2>📁 Available Documents</h2>
+
+        {% if documents %}
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Document Name</th>
+                        <th>Document Owner</th>
+                        <th>Category</th>
+                        <th>File Type</th>
+                        <th>Created Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for doc in documents %}
+
+                    <tr>
+
+                        <td>
+                            <strong>{{ doc.title }}</strong>
+                        </td>
+
+                        <td>
+                            {{ doc.owner.name if doc.owner else "Unknown" }}
+                        </td>
+
+                        <td>
+                            {{ doc.category or "-" }}
+                        </td>
+
+                        <td>
+                            {{ doc.filename.rsplit(".", 1)[-1].upper() }}
+                        </td>
+
+                        <td>
+                            {{ doc.created_at.strftime("%d-%m-%Y")
+                               if doc.created_at else "-" }}
+                        </td>
+
+                        <td>
+
+                            <!-- DOWNLOAD -->
+
+                            {% if current_user.role == "ADMIN"
+                                  or doc.owner_id == current_user.id
+                                  or doc.id in editable_document_ids
+                                  or current_user.role == "VIEWER" %}
+
+                                <a
+                                    class="btn"
+                                    href="{{ url_for(
+                                        'documents.download_document',
+                                        document_id=doc.id
+                                    ) }}"
+                                >
+                                    Download
+                                </a>
+
+                            {% endif %}
+
+
+                            <!-- OWNER ACTIONS -->
+
+                            {% if current_user.role == "OWNER"
+                                  and doc.owner_id == current_user.id %}
+
+                                <!-- EDIT DOCUMENT DETAILS -->
+
+                                <form
+                                    class="inline-form"
+                                    action="{{ url_for(
+                                        'documents.edit_document',
+                                        document_id=doc.id
+                                    ) }}"
+                                    method="POST"
+                                >
+
+                                    <input
+                                        type="hidden"
+                                        name="csrf_token"
+                                        value="{{ csrf_token() }}"
+                                    >
+
+                                    <input
+                                        type="text"
+                                        name="title"
+                                        value="{{ doc.title }}"
+                                        placeholder="Document title"
+                                        required
+                                    >
+
+                                    <input
+                                        type="text"
+                                        name="category"
+                                        value="{{ doc.category or '' }}"
+                                        placeholder="Category"
+                                    >
+
+                                    <button class="green" type="submit">
+                                        Save Details
+                                    </button>
+
+                                </form>
+
+
+                                <!-- SHARE DOCUMENT -->
+
+                                <form
+                                    class="inline-form"
+                                    action="{{ url_for(
+                                        'documents.share_document',
+                                        document_id=doc.id
+                                    ) }}"
+                                    method="POST"
+                                >
+
+                                    <input
+                                        type="hidden"
+                                        name="csrf_token"
+                                        value="{{ csrf_token() }}"
+                                    >
+
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        placeholder="Viewer email"
+                                        required
+                                    >
+
+                                    <select
+                                        name="permission_type"
+                                        required
+                                    >
+                                        <option value="READ">
+                                            READ
+                                        </option>
+
+                                        <option value="EDIT">
+                                            EDIT
+                                        </option>
+                                    </select>
+
+                                    <button type="submit">
+                                        Share
+                                    </button>
+
+                                </form>
+
+                            {% endif %}
+
+
+                            <!-- EDITABLE SHARED DOCUMENT -->
+
+                            {% if current_user.role == "VIEWER"
+                                  and doc.id in editable_document_ids
+                                  and doc.filename.lower().endswith(".pdf") %}
+
+                                <a
+                                    class="btn green"
+                                    href="{{ url_for(
+                                        'documents.pdf_editor',
+                                        document_id=doc.id
+                                    ) }}"
+                                >
+                                    Edit PDF
+                                </a>
+
+                            {% endif %}
+
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        {% else %}
+
+            <p class="empty">
+                No documents found.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- OWNER: SHARED USERS AND REVOKE ACCESS -->
+
+    {% if current_user.role == "OWNER" %}
+
+    <div class="permission-section">
+
+        <h2>👥 Shared Users & Permissions</h2>
+
+        <p class="section-description">
+            Manage users who have access to your documents.
+            You can see their permission level and revoke access.
+        </p>
+
+        {% set has_shared_permissions = namespace(value=false) %}
+
+        {% for doc in documents %}
+
+            {% if doc.owner_id == current_user.id %}
+
+                {% for permission in owner_permissions.get(doc.id, []) %}
+
+                    {% set has_shared_permissions.value = true %}
+
+                    <div class="shared-user">
+
+                        <h3>{{ doc.title }}</h3>
+
+                        <p>
+                            <strong>Shared with:</strong>
+                            {{ permission.user.email }}
+                        </p>
+
+                        <p>
+                            <strong>Permission:</strong>
+
+                            {% if permission.permission_type == "READ" %}
+
+                                <span class="permission-badge">
+                                    READ ONLY
+                                </span>
+
+                            {% elif permission.permission_type == "EDIT" %}
+
+                                <span class="permission-badge edit-badge">
+                                    READ + EDIT
+                                </span>
+
+                            {% endif %}
+                        </p>
+
+                        <form
+                            action="{{ url_for(
+                                'documents.revoke_permission',
+                                document_id=doc.id,
+                                user_id=permission.user_id
+                            ) }}"
+                            method="POST"
+                            onsubmit="return confirm('Are you sure you want to revoke this user access?');"
+                        >
+
+                            <input
+                                type="hidden"
+                                name="csrf_token"
+                                value="{{ csrf_token() }}"
+                            >
+
+                            <button class="red" type="submit">
+                                Revoke Access
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                {% endfor %}
+
+            {% endif %}
+
+        {% endfor %}
+
+        {% if not has_shared_permissions.value %}
+
+            <p class="empty">
+                No users currently have access to your documents.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+    {% endif %}
+
+
+    <!-- VIEWER: READ AND DOWNLOAD PERMISSION -->
+
+    {% if current_user.role == "VIEWER" %}
+
+    <div class="permission-section">
+
+        <h2>📄 Read & Download Permission</h2>
+
+        <p class="section-description">
+            Documents shared with you that have READ permission.
+            You can download these documents, but you cannot edit them.
+        </p>
+
+        {% if shared_read_documents %}
+
+            {% for doc in shared_read_documents %}
+
+            <div class="document-card">
+
+                <h3>{{ doc.title }}</h3>
+
+                <p>
+                    <strong>Owner:</strong>
+                    {{ doc.owner.name if doc.owner else "Unknown" }}
+                </p>
+
+                <p>
+                    <strong>Category:</strong>
+                    {{ doc.category or "-" }}
+                </p>
+
+                <p>
+                    <strong>File:</strong>
+                    {{ doc.filename }}
+                </p>
+
+                <span class="permission-badge">
+                    READ ONLY
+                </span>
+
+                <br><br>
+
+                <a
+                    class="btn"
+                    href="{{ url_for(
+                        'documents.download_document',
+                        document_id=doc.id
+                    ) }}"
+                >
+                    Download Document
+                </a>
+
+            </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p class="empty">
+                No documents shared with READ permission.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- VIEWER: EDIT PERMISSION -->
+
+    <div class="permission-section">
+
+        <h2>✏️ Edit Permission</h2>
+
+        <p class="section-description">
+            Documents shared with you that have EDIT permission.
+            You can download and edit these documents.
+        </p>
+
+        {% if shared_edit_documents %}
+
+            {% for doc in shared_edit_documents %}
+
+            <div class="document-card">
+
+                <h3>{{ doc.title }}</h3>
+
+                <p>
+                    <strong>Owner:</strong>
+                    {{ doc.owner.name if doc.owner else "Unknown" }}
+                </p>
+
+                <p>
+                    <strong>Category:</strong>
+                    {{ doc.category or "-" }}
+                </p>
+
+                <p>
+                    <strong>File:</strong>
+                    {{ doc.filename }}
+                </p>
+
+                <span class="permission-badge edit-badge">
+                    READ + EDIT
+                </span>
+
+                <br><br>
+
+                <a
+                    class="btn"
+                    href="{{ url_for(
+                        'documents.download_document',
+                        document_id=doc.id
+                    ) }}"
+                >
+                    Download Document
+                </a>
+
+                {% if doc.filename.lower().endswith(".pdf") %}
+
+                    <a
+                        class="btn green"
+                        href="{{ url_for(
+                            'documents.pdf_editor',
+                            document_id=doc.id
+                        ) }}"
+                    >
+                        Edit PDF
+                    </a>
+
+                {% endif %}
+
+
+                <!-- EDIT DOCUMENT METADATA -->
+
+                <form
+                    class="inline-form"
+                    action="{{ url_for(
+                        'documents.edit_document',
+                        document_id=doc.id
+                    ) }}"
+                    method="POST"
+                >
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
+
+                    <input
+                        type="text"
+                        name="title"
+                        value="{{ doc.title }}"
+                        required
+                    >
+
+                    <input
+                        type="text"
+                        name="category"
+                        value="{{ doc.category or '' }}"
+                    >
+
+                    <button class="green" type="submit">
+                        Save Details
+                    </button>
+
+                </form>
+
+            </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p class="empty">
+                No documents shared with EDIT permission.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+</body>
+</html>
